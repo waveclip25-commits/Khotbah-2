@@ -1,0 +1,74 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build Web App
+        run: |
+          npm run clean
+          npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          # Disabling cache temporarily to ensure a fresh build
+          # cache: 'gradle'
+
+      - name: Sync Capacitor
+        run: |
+          # Brutal Clean
+          rm -rf dist
+          rm -rf android/app/src/main/assets/public
+          rm -rf android/app/build
+          
+          # Rebuild Web
+          npm run build
+          
+          # Sync & Copy
+          npx cap sync android
+          npx cap copy android
+          
+      - name: Verify Synced Assets
+        run: |
+          echo "==== VERIFYING SYNCED ASSETS ===="
+          if [ -d "android/app/src/main/assets/public" ]; then
+            echo "Assets folder exists."
+            grep "Mimbar AI v" android/app/src/main/assets/public/index.html || echo "WARNING: Version string not found in synced index.html!"
+          else
+            echo "ERROR: Assets folder MISSING!"
+            exit 1
+          fi
+          echo "================================="
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Debug APK
+        working-directory: android
+        run: gradle clean assembleDebug --no-build-cache --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
