@@ -22,50 +22,28 @@ jobs:
 
       - run: npm ci
 
-      - name: Build Web App
-        run: |
-          npm run clean
-          npm run build
-
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
-          # Disabling cache temporarily to ensure a fresh build
-          # cache: 'gradle'
+
+      - name: Build Web App
+        run: npm run build
 
       - name: Sync Capacitor
         run: |
-          # Brutal Clean
-          rm -rf dist
           rm -rf android/app/src/main/assets/public
-          rm -rf android/app/build
-          
-          # Rebuild Web
-          npm run build
-          
-          # Sync & Copy
           npx cap sync android
-          npx cap copy android
-          
-      - name: Verify Synced Assets
-        run: |
-          echo "==== VERIFYING SYNCED ASSETS ===="
-          if [ -d "android/app/src/main/assets/public" ]; then
-            echo "Assets folder exists."
-            grep "Mimbar AI v" android/app/src/main/assets/public/index.html || echo "WARNING: Version string not found in synced index.html!"
-          else
-            echo "ERROR: Assets folder MISSING!"
-            exit 1
-          fi
-          echo "================================="
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
       - name: Build Debug APK
         working-directory: android
-        run: gradle clean assembleDebug --no-build-cache --stacktrace
+        run: ./gradlew clean assembleDebug --no-build-cache
 
       - uses: actions/upload-artifact@v4
         with:
